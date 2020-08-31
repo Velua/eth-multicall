@@ -1,7 +1,11 @@
 import Web3 from "web3";
 import { ABIMultiCallContract } from "./abi";
 import { chunk, mapValues, zip, isNumber, omit, toPairs } from "lodash";
-import { createIndexSet, mergeFromIndexSet } from "./helpers";
+import {
+  createIndexSet,
+  mergeFromIndexSet,
+  removeOverSizedChunks,
+} from "./helpers";
 
 export interface Options {
   web3: Web3;
@@ -92,7 +96,11 @@ export class MultiCall {
     calls: MultiCallItem[],
     chunkSizes: number[]
   ): Promise<MultiCallReturn[]> {
-    const chunks = chunk(calls, chunkSizes[0]);
+    const chunksNoBiggerThanRequests = removeOverSizedChunks(
+      calls.length,
+      chunkSizes
+    );
+    const chunks = chunk(calls, chunksNoBiggerThanRequests[0]);
 
     const res = await Promise.all(
       chunks.map(async (chunk) => {
@@ -123,7 +131,7 @@ export class MultiCall {
           if (res.success) {
             return res.result!;
           }
-          const newChunkSize = chunkSizes.slice(1);
+          const newChunkSize = chunksNoBiggerThanRequests.slice(1);
           if (newChunkSize.length == 0)
             throw new Error(`Failed request ${res.error}`);
           return this.rawCallInChunks(res.requests, newChunkSize);

@@ -11,3 +11,18 @@ export const createIndexSet = (data: any[][]): indexSet[] =>
 
 export const mergeFromIndexSet = <T>(arr: T[], indexes: indexSet[]): T[][] =>
   indexes.map(([before, after]) => arr.slice(before, after));
+
+export const removeOverSizedChunks = (
+  callsLength: number,
+  chunkSizes: number[]
+): number[] => {
+  const hasOverSizedChunks = chunkSizes.some(
+    (chunkSize) => chunkSize > callsLength
+  );
+  if (!hasOverSizedChunks) return chunkSizes;
+
+  const noOverSizedChunks = chunkSizes.filter(
+    (chunkSize) => chunkSize < callsLength
+  );
+  return [callsLength, ...noOverSizedChunks];
+};

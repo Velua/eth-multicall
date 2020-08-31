@@ -1,6 +1,11 @@
 require("dotenv").config();
 import Web3 from "web3";
-import { createIndexSet, mergeFromIndexSet, indexSet } from "../src/helpers";
+import {
+  createIndexSet,
+  mergeFromIndexSet,
+  indexSet,
+  removeOverSizedChunks,
+} from "../src/helpers";
 import { MultiCall, MultiCallItem } from "../src/index";
 import { ABISmartToken, ABIConverterV28 } from "../abis";
 
@@ -158,4 +163,17 @@ describe("can pull data", () => {
   //     expect(e.message).toBe("something");
   //   }
   // });
+
+  test("can remove oversized chunks", () => {
+    const res = removeOverSizedChunks(150, [600, 400, 300, 100, 50, 25]);
+    expect(res).toStrictEqual([150, 100, 50, 25]);
+
+    const chunks2 = [100, 80, 50];
+    const res2 = removeOverSizedChunks(150, chunks2);
+    expect(res2).toStrictEqual(chunks2);
+
+    const chunks3 = [150, 100, 80, 50];
+    const res3 = removeOverSizedChunks(150, chunks3);
+    expect(res3).toStrictEqual(chunks3);
+  });
 });
