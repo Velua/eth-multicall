@@ -3,6 +3,7 @@
   "version": "1.1.2",
   "main": "dist/index.js",
   "license": "MIT",
+  "repository": "https://github.com/Velua/eth-multicall.git",
   "devDependencies": {
     "@types/jest": "^26.0.9",
     "dotenv": "^8.2.0",
