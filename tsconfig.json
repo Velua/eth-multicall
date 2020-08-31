@@ -1,0 +1,14 @@
+{
+  "compileOnSave": true,
+  "include": ["src"],
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "downlevelIteration": true,
+    "module": "commonjs",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "lib": ["ES2020", "DOM"],
+    "outDir": "dist",
+    "declaration": true
+  }
+}
