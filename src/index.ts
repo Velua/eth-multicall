@@ -1,6 +1,14 @@
 import Web3 from "web3";
 import { ABIMultiCallContract } from "./abi";
-import { chunk, mapValues, zip, isNumber, omit, toPairs } from "lodash";
+import {
+  chunk,
+  mapValues,
+  zip,
+  isNumber,
+  omit,
+  toPairs,
+  fromPairs,
+} from "lodash";
 import {
   createIndexSet,
   mergeFromIndexSet,
@@ -45,6 +53,16 @@ export interface AbiEncodedShape {
 
 export enum DataTypes {
   originAddress = "originAddress",
+}
+
+interface CallOptions {
+  skipDecode: boolean;
+  traditional: boolean;
+}
+
+export interface UserCallOptions {
+  skipDecode?: boolean;
+  traditional?: boolean;
 }
 
 export class MultiCall {
@@ -154,6 +172,41 @@ export class MultiCall {
     }
   }
 
+  private async normalCall(groupsOfShapes: Shape[][]) {
+    return Promise.all(
+      groupsOfShapes.map(async (group) =>
+        Promise.all(
+          group.map(async (shape) => {
+            const originAddresses = Object.values(shape).map(
+              (abi) => abi._parent._address
+            );
+
+            const firstOriginAddress = originAddresses[0];
+
+            const sameOriginAddress = originAddresses.every(
+              (address) => address == firstOriginAddress
+            );
+
+            if (!sameOriginAddress)
+              throw new Error("Shape group must have the same origin address");
+
+            return {
+              _originAddress: firstOriginAddress,
+              data: fromPairs(
+                await Promise.all(
+                  toPairs(shape).map(async ([label, abi]) => [
+                    label,
+                    await abi.call(),
+                  ])
+                )
+              ),
+            };
+          })
+        )
+      )
+    );
+  }
+
   private encodeAbi(groupsOfShapes: Shape[][]): AbiEncodedShape[][] {
     return groupsOfShapes.map((group) =>
       group.map((shape) => {
@@ -189,62 +242,10 @@ export class MultiCall {
     );
   }
 
-  private objToArray<T>(obj: {
-    [item: string]: T;
-  }): { key: string; value: T }[] {
-    return Object.keys(obj).map((key) => ({ key, value: obj[key] }));
-  }
+  recoverLabels(original: ShapeWithLabel[][], withData: any[][]) {
+    const nameRecall = zip(original, withData);
 
-  async all(groupsOfShapes: ShapeWithLabel[][], skipDecode = false) {
-    const plainShapes = this.stripLabels(groupsOfShapes);
-    const abiEncodedGroups = this.encodeAbi(plainShapes);
-    const groupsIndexSet = createIndexSet(groupsOfShapes);
-    const multiCalls = abiEncodedGroups.flatMap((encodedGroup) =>
-      encodedGroup.map((group) =>
-        Object.values(group.data).map(
-          (encodedString) =>
-            [group.originAddress, encodedString] as MultiCallItem
-        )
-      )
-    );
-    const res = await this.multiCallGroups(multiCalls);
-
-    const rebuiltRes = mergeFromIndexSet(res, groupsIndexSet);
-
-    const answer = zip(plainShapes, rebuiltRes);
-    const better = answer.map(([abi, res]) => zip(abi, res));
-    const rawMatch = better.map((group) =>
-      group.map(([shape, resultsArr]) =>
-        zip(this.objToArray(shape), resultsArr)
-      )
-    );
-    const withOrigin = rawMatch.map((group) =>
-      group.map((keys) => {
-        return keys.reduce((acc, [keyAbi, [origin, { success, data }]]) => {
-          const callReturn = keyAbi.value as CallReturn<any>;
-
-          const result = skipDecode
-            ? data
-            : success
-            ? this.decodeHex(
-                data,
-                callReturn._method.outputs.length == 1
-                  ? callReturn._method.outputs[0].type
-                  : callReturn._method.outputs.map((x) => x.type)
-              )
-            : undefined;
-
-          return {
-            ...acc,
-            _originAddress: origin,
-            [keyAbi.key]: result,
-          };
-        }, {} as { [key: string]: string | undefined; _originAddress: string });
-      })
-    );
-
-    const nameRecall = zip(groupsOfShapes, withOrigin);
-    const renamed = nameRecall.map(([plainShape, withOrigin]) => {
+    const toReturn = nameRecall.map(([plainShape, withOrigin]) => {
       const zipped = zip(plainShape, withOrigin);
       return zipped.map(([plain, origin]) => {
         const originAddressKey = "_originAddress";
@@ -264,9 +265,95 @@ export class MultiCall {
           }),
           origin
         );
-        return omit(keysAdded, originAddressKey);
+        const big = omit(keysAdded, originAddressKey);
+
+        const noData = omit(big, "data");
+        return {
+          ...noData,
+          ...big.data,
+        };
       });
     });
+
+    return toReturn;
+  }
+
+  async all(
+    groupsOfShapes: ShapeWithLabel[][],
+    passedOptions?: UserCallOptions
+  ) {
+    const defaultOptions: CallOptions = {
+      skipDecode: false,
+      traditional: false,
+    };
+    const options: CallOptions = {
+      ...defaultOptions,
+      ...passedOptions,
+    };
+
+    const { skipDecode, traditional } = options;
+    const plainShapes = this.stripLabels(groupsOfShapes);
+
+    if (traditional) {
+      const normalEncoded = await this.normalCall(plainShapes);
+      const flattened = normalEncoded.flat(2);
+      console.log(flattened, "should be flat");
+      const propertiesCount = flattened.reduce(
+        (acc, item) => Object.keys(item.data).length + acc,
+        0
+      );
+      console.log(propertiesCount, "traditional requests made");
+      return this.recoverLabels(groupsOfShapes, normalEncoded);
+    }
+
+    const abiEncodedGroups = this.encodeAbi(plainShapes);
+    const groupsIndexSet = createIndexSet(groupsOfShapes);
+    const multiCalls = abiEncodedGroups.flatMap((encodedGroup) =>
+      encodedGroup.map((group) =>
+        Object.values(group.data).map(
+          (encodedString) =>
+            [group.originAddress, encodedString] as MultiCallItem
+        )
+      )
+    );
+    const res = await this.multiCallGroups(multiCalls);
+
+    const rebuiltRes = mergeFromIndexSet(res, groupsIndexSet);
+
+    const answer = zip(plainShapes, rebuiltRes);
+    const better = answer.map(([abi, res]) => zip(abi, res));
+    const rawMatch = better.map((group) =>
+      group.map(([shape, resultsArr]) => zip(toPairs(shape), resultsArr))
+    );
+    const withOrigin = rawMatch.map((group) =>
+      group.map((keys) => {
+        return keys.reduce(
+          (acc, [[key, value], [origin, { success, data }]]) => {
+            const callReturn = value;
+
+            const result = skipDecode
+              ? data
+              : success
+              ? this.decodeHex(
+                  data,
+                  callReturn._method.outputs.length == 1
+                    ? callReturn._method.outputs[0].type
+                    : callReturn._method.outputs.map((x) => x.type)
+                )
+              : undefined;
+
+            return {
+              ...acc,
+              _originAddress: origin,
+              [key]: result,
+            };
+          },
+          {} as { [key: string]: string | undefined; _originAddress: string }
+        );
+      })
+    );
+
+    const renamed = this.recoverLabels(groupsOfShapes, withOrigin);
 
     return renamed;
   }

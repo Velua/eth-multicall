@@ -67,8 +67,6 @@ describe("can pull data", () => {
       1,
     ]);
 
-    console.log(chunkedCalls, "is chunked");
-
     expect(res).toStrictEqual(chunkedCalls);
   });
 
@@ -105,10 +103,11 @@ describe("can pull data", () => {
       web3,
       "0x5Eb3fa2DFECdDe21C950813C665E9364fa609bD2"
     );
-    const [tokensRes, convertersRes] = await multiCall.all([
-      tokens,
-      converters,
-    ]);
+
+    const [tokensRes, convertersRes] = await multiCall.all(
+      [tokens, converters],
+      { traditional: true }
+    );
 
     expect(tokensRes).toStrictEqual([
       {
