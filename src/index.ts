@@ -196,7 +196,7 @@ export class MultiCall {
                 await Promise.all(
                   toPairs(shape).map(async ([label, abi]) => [
                     label,
-                    await abi.call(),
+                    await abi.call().catch(() => {}),
                   ])
                 )
               ),
@@ -297,7 +297,6 @@ export class MultiCall {
     if (traditional) {
       const normalEncoded = await this.normalCall(plainShapes);
       const flattened = normalEncoded.flat(2);
-      console.log(flattened, "should be flat");
       const propertiesCount = flattened.reduce(
         (acc, item) => Object.keys(item.data).length + acc,
         0
