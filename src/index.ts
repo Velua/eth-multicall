@@ -163,7 +163,7 @@ export class MultiCall {
           const newChunkSize = chunksNoBiggerThanRequests.slice(1);
           if (newChunkSize.length == 0)
             throw new Error(`Failed request ${res.error}`);
-          return this.rawCallInChunks(res.requests, newChunkSize);
+          return this.rawCallInChunks(res.requests, newChunkSize, blockHeight);
         })
       );
       return working.flat(1);
@@ -308,7 +308,7 @@ export class MultiCall {
     const plainShapes = this.stripLabels(groupsOfShapes);
 
     if (traditional) {
-      const normalEncoded = await this.normalCall(plainShapes);
+      const normalEncoded = await this.normalCall(plainShapes, blockHeight);
       const flattened = normalEncoded.flat(2);
       const propertiesCount = flattened.reduce(
         (acc, item) => Object.keys(item.data).length + acc,
@@ -328,7 +328,7 @@ export class MultiCall {
         )
       )
     );
-    const res = await this.multiCallGroups(multiCalls);
+    const res = await this.multiCallGroups(multiCalls, blockHeight);
 
     const rebuiltRes = mergeFromIndexSet(res, groupsIndexSet);
 
