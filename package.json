@@ -1,9 +1,12 @@
 {
   "name": "eth-multicall",
-  "version": "1.3.1",
+  "version": "1.3.3",
   "main": "dist/index.js",
   "license": "MIT",
   "repository": "https://github.com/Velua/eth-multicall.git",
+  "scripts": {
+    "postinstall": "tsc"
+  },
   "devDependencies": {
     "@types/jest": "^26.0.9",
     "dotenv": "^8.2.0",
