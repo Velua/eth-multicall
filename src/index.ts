@@ -91,6 +91,8 @@ export class MultiCall {
 
     try {
       const callArgs = blockHeight ? [null, blockHeight] : [];
+
+      console.log({ callArgs });
       const res = await multiContract.methods
         .aggregate(calls, strict)
         .call(...callArgs);
@@ -202,6 +204,7 @@ export class MultiCall {
               throw new Error("Shape group must have the same origin address");
 
             const callArgs = blockHeight ? [null, blockHeight] : [];
+            console.log({ callArgs });
             return {
               _originAddress: firstOriginAddress,
               data: fromPairs(
