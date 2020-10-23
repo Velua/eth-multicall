@@ -27,6 +27,7 @@ describe("index set works as expected", () => {
 
   test("can rebuild from an index set", () => {
     const indexSet = createIndexSet(data);
+    // @ts-ignore
     const flat = data.flat(1);
     expect(mergeFromIndexSet(flat, indexSet)).toStrictEqual(data);
   });

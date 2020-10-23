@@ -30,7 +30,7 @@ export interface CallReturn<T = any> {
   _parent: {
     _address: string;
   };
-  call: () => Promise<T>;
+  call: (options?: {}, blockHeight?: number) => Promise<T>;
   encodeABI: () => string;
 }
 
@@ -58,11 +58,13 @@ export enum DataTypes {
 interface CallOptions {
   skipDecode: boolean;
   traditional: boolean;
+  blockHeight?: number;
 }
 
 export interface UserCallOptions {
   skipDecode?: boolean;
   traditional?: boolean;
+  blockHeight?: number;
 }
 
 export class MultiCall {
@@ -79,7 +81,8 @@ export class MultiCall {
 
   async rawCall(
     calls: MultiCallItem[],
-    strict: boolean = false
+    strict: boolean = false,
+    blockHeight?: number
   ): Promise<MultiCallReturn[]> {
     const multiContract = new this.web3.eth.Contract(
       ABIMultiCallContract,
@@ -87,7 +90,10 @@ export class MultiCall {
     );
 
     try {
-      const res = await multiContract.methods.aggregate(calls, strict).call();
+      const callArgs = blockHeight ? [null, blockHeight] : [];
+      const res = await multiContract.methods
+        .aggregate(calls, strict)
+        .call(...callArgs);
 
       const matched = zip(
         calls.map(([address]) => address),
@@ -101,18 +107,23 @@ export class MultiCall {
     }
   }
 
-  async multiCallGroups(calls: MultiCallItem[][]) {
+  async multiCallGroups(calls: MultiCallItem[][], blockHeight?: number) {
     if (calls.length == 0) return [];
     const indexes = createIndexSet(calls);
     const flatCalls = calls.flat(1);
 
-    const res = await this.rawCallInChunks(flatCalls, this.chunkSizes);
+    const res = await this.rawCallInChunks(
+      flatCalls,
+      this.chunkSizes,
+      blockHeight
+    );
     return mergeFromIndexSet(res, indexes);
   }
 
   async rawCallInChunks(
     calls: MultiCallItem[],
-    chunkSizes: number[]
+    chunkSizes: number[],
+    blockHeight?: number
   ): Promise<MultiCallReturn[]> {
     const chunksNoBiggerThanRequests = removeOverSizedChunks(
       calls.length,
@@ -124,7 +135,7 @@ export class MultiCall {
       chunks.map(async (chunk) => {
         const requests = chunk;
         try {
-          const result = await this.rawCall(chunk, false);
+          const result = await this.rawCall(chunk, false, blockHeight);
           return {
             success: true,
             requests,
@@ -172,7 +183,7 @@ export class MultiCall {
     }
   }
 
-  private async normalCall(groupsOfShapes: Shape[][]) {
+  private async normalCall(groupsOfShapes: Shape[][], blockHeight?: number) {
     return Promise.all(
       groupsOfShapes.map(async (group) =>
         Promise.all(
@@ -190,13 +201,14 @@ export class MultiCall {
             if (!sameOriginAddress)
               throw new Error("Shape group must have the same origin address");
 
+            const callArgs = blockHeight ? [null, blockHeight] : [];
             return {
               _originAddress: firstOriginAddress,
               data: fromPairs(
                 await Promise.all(
                   toPairs(shape).map(async ([label, abi]) => [
                     label,
-                    await abi.call().catch(() => {}),
+                    await abi.call(...callArgs).catch(() => {}),
                   ])
                 )
               ),
@@ -285,13 +297,14 @@ export class MultiCall {
     const defaultOptions: CallOptions = {
       skipDecode: false,
       traditional: false,
+      blockHeight: undefined,
     };
     const options: CallOptions = {
       ...defaultOptions,
       ...passedOptions,
     };
 
-    const { skipDecode, traditional } = options;
+    const { skipDecode, traditional, blockHeight } = options;
     const plainShapes = this.stripLabels(groupsOfShapes);
 
     if (traditional) {
