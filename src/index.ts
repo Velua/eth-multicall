@@ -295,6 +295,8 @@ export class MultiCall {
     groupsOfShapes: ShapeWithLabel[][],
     passedOptions?: UserCallOptions
   ) {
+    const flattenedAmount = groupsOfShapes.flat(9).length;
+    if (flattenedAmount == 0) return groupsOfShapes;
     const defaultOptions: CallOptions = {
       skipDecode: false,
       traditional: false,
