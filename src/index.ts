@@ -100,10 +100,8 @@ export class MultiCall {
         calls.map(([address]) => address),
         res.returnData
       ) as MultiCallReturn[];
-      console.log("Multisuccess", calls.length, "requests");
       return matched;
     } catch (e) {
-      console.warn("MultiFailure", calls.length, "requests");
       throw new Error(e);
     }
   }
@@ -153,8 +151,14 @@ export class MultiCall {
     );
 
     const allFulfilled = res.every((res) => res.success);
+    const allFailedAndLastChunk =
+      chunksNoBiggerThanRequests.length == 1 &&
+      res.every((res) => !res.success);
+
     if (allFulfilled) {
       return res.flatMap((x) => x.result!);
+    } else if (allFailedAndLastChunk) {
+      throw new Error(`All requests failed on last chunk ${res[0].error}`);
     } else {
       const working = await Promise.all(
         res.map(async (res) => {
