@@ -48,7 +48,7 @@ const [tokensRes] = await multiCall.all([tokens]);
     {
         symbol: "BNT",
         decimals: "18",
-},
+    }
 ]
 
 ```
